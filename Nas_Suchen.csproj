@@ -1,0 +1,55 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OutputType>WinExe</OutputType>
+	<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>    
+	<PublishSingleFile>true</PublishSingleFile> 
+	<Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="DivDocs\gps.cs" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <PackageReference Include="MySql.Data" Version="9.2.0" />
+    <PackageReference Include="MySqlConnector" Version="2.4.0" />
+  </ItemGroup>
+<ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <Reference Include="Sort_Dialog">
+        <HintPath>..\Sort_Dialog\bin\Debug\net8.0-windows\Sort_Dialog.dll</HintPath>
+    </Reference>
+</ItemGroup>
+
+<ItemGroup Condition="'$(Configuration)' == 'Release'">
+    <Reference Include="Sort_Dialog">
+        <HintPath>..\Sort_Dialog\bin\Release\net8.0-windows\Sort_Dialog.dll</HintPath>
+    </Reference>
+</ItemGroup>
+
+<ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <None Include="..\Sort_Dialog\bin\Debug\net8.0-windows\Sort_Dialog.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+</ItemGroup>
+
+<ItemGroup Condition="'$(Configuration)' == 'Release'">
+    <None Include="..\Sort_Dialog\bin\Release\net8.0-windows\Sort_Dialog.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+</ItemGroup>
+
+<ItemGroup>
+		<None Include="version.res" />
+</ItemGroup>
+	
+<PropertyGroup>
+		<Win32Resource>version.res</Win32Resource>
+</PropertyGroup>
+	
+</Project>
+

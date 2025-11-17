@@ -1,0 +1,24 @@
+SelfContained Runtime erstellen
+
+ dotnet publish -c Release -r win-x64 --self-contained /p:PublishSingleFile=true
+
+
+
+Weitere Features:
+-----------------
+Filesize
+
+Advanced: Spalten Konfiguration, Plus Minus
+
+
+Doppelklick auf Spalte
+======================
+--> Dateiname: ladet die Datei vom Server über das Netzwerk und öffnet diese mit der Applikation, die mit der Extension verknüpft ist.
+               User muss im LAN mit geeigneter User-Id eingeloggt sein.
+--> Pfad: öffnet den Explorer mit dem entsprechendem Verzeichnis und markiert die Datei..
+          User muss im LAN mit geeigneter User-Id eingeloggt sein.
+--> Preview: soferne eine Preview in der Datenbank verspeichert ist, wird diese mit der lokal verknüpften Applikation gestartet.
+--> Ordnertyp: ladet die entsprechende Datei vom Server mittels Datenbankzugriff in das lokale Downloadverzeichnis.
+               User muss am Datenbankserver im entsprechenden Dateisystem zumindest Leserechte haben.
+--> Breitengrad: wenn ein GEO-Tag abgespeichert ist, wird der Browser(Google-Maps) mit den entsprechenden Koordinaten geöffnet. 
+ 

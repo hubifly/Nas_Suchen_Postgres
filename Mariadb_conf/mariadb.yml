@@ -1,0 +1,27 @@
+version: '3.7'
+
+services:
+  mariadb:
+    image: mariadb:latest
+    container_name: mariadb11
+    environment:
+      MYSQL_ROOT_PASSWORD: 2wsd2wsd  # change this to your desired root password
+    ports:
+      - "3308:3306"  # Exposes MariaDB on port 3306
+    volumes:
+      - /share/CACHEDEV3_DATA/Container/container-station-data/lib/docker/volumes/196c5a3ed2ba86857ff3cbe9dc081053aef895e8423a4e351a92ef98edc59dda/_data:/var/lib/mysql
+      - /share/NonMedia/Home/sm/mariadb11/my.cnf:/etc/mysql/my.cnf
+      - /share/CACHEDEV1_DATA/.qpkg/MariaDB10/etc/ssl/ca-cert.pem:/etc/mysql/ssl/ca-cert.pem
+      - /share/CACHEDEV1_DATA/.qpkg/MariaDB10/etc/ssl/server-cert.pem:/etc/mysql/ssl/server-cert.pem
+      - /share/CACHEDEV1_DATA/.qpkg/MariaDB10/etc/ssl/server.key:/etc/mysql/ssl/server.key
+    command:
+      --ssl-ca=/etc/mysql/ssl/ca-cert.pem
+      --ssl-cert=/etc/mysql/ssl/server-cert.pem
+      --ssl-key=/etc/mysql/ssl/server.key
+      --ssl=1  # Enabling SSL
+    networks:
+      - mariadb_network
+
+networks:
+  mariadb_network:
+    driver: bridge
