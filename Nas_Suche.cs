@@ -1,12 +1,12 @@
 ﻿using System.Data;
 using System.Diagnostics;
-//using System.Globalization;
+using System.Diagnostics.Eventing.Reader;
+
 using System.Net;
-using MySql.Data.MySqlClient;
-//using Org.BouncyCastle.Tls;
+//using MySql.Data.MySqlClient;
 using Sort_Dialog;
-//using static System.ComponentModel.Design.ObjectSelectorEditor;
-//using static Sort_Dialog.Globals;
+using static System.ComponentModel.Design.ObjectSelectorEditor;
+using Npgsql;
 
 namespace Nas_Suchen
 {
@@ -33,6 +33,9 @@ namespace Nas_Suchen
         int Media_longitude = 13;
         int Media_size_bytes = 14;
         int Media_thumbnail_size = 15;
+        int Media_person_nr = 16;
+        int Media_face_scan_date = 17;
+        int Media_face_scan_count = 18;
 
         int expert_mode = 0;
 
@@ -42,13 +45,13 @@ namespace Nas_Suchen
         // Basis-Definition der Spalten und Typen für den Sort-Dialog
         // ----------------------------------------------------------
         string[] Spalten_namen = { "Dateiname", "Pfad", "Interpret", "Jahr", "Album", "Genre", "DateiTyp", "FileExt", "Hinzugefügt", "Erstellt",
-                                   "Ordnertyp", "Breitengrad", "Längengrad", "Größe", "Thumbnailgröße" };
+                                   "Ordnertyp", "Breitengrad", "Längengrad", "Größe", "Thumbnailgröße", "BildNr.", "Gesichtsscan", "Gesichter" };
         string[] Spalten_namen_col_select = { "Dateiname", "Pfad", "Interpret", "Jahr", "Album", "Genre", "DateiTyp", "FileExt", "Hinzugefügt", "Erstellt", "Preview",
-                                   "Ordnertyp", "Breitengrad", "Längengrad", "Größe", "Thumbnailgröße" };
+                                   "Ordnertyp", "Breitengrad", "Längengrad", "Größe", "Thumbnailgröße", "BildNr.", "Gesichtsscan", "Gesichter" };
         // Spaltenüberschriften für Sort und Suchen-Dialog   
 
         string[] felder_z = { "mf.filename", "mf.pathname", "mf.interpret", "mf.year", "mf.album", "mf.genre", "mf.extension", "mf.ext_char", "mf.added",
-                              "mf.aufnahme_datum", "mf.source", "mf.latitude", "mf.longitude", "mf.size_bytes", "length(mf.thumbnail)" };
+                              "mf.aufnahme_datum", "mf.source", "mf.latitude", "mf.longitude", "mf.size_bytes", "length(mf.thumbnail)", "mf.id", "mf.vector_created", "fc.cnt" };
         // Spaltennamen in der Datenbank   
 
         // Typen in den jeweiligen Spalten in der DB
@@ -66,10 +69,17 @@ namespace Nas_Suchen
                           (int)Globals.DBtypen.db_decimal,
                           (int)Globals.DBtypen.db_decimal,
                           (int)Globals.DBtypen.db_int64,
-                          (int)Globals.DBtypen.db_int32};
+                          (int)Globals.DBtypen.db_int32,
+
+                          (int)Globals.DBtypen.db_int64,
+                          (int)Globals.DBtypen.db_datetime,
+                          (int)Globals.DBtypen.db_int32,
+                         };
 
         // Verwendeter Usercode aus der Tabelle sm.usercodes 0 kein Usercode
-        int[] Usercodes = { 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 7, 0, 0, 0, 0 };
+        int[] Usercodes = { 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0 };
+        
+        List<List<string[]>> u_codes = new List<List<string[]>>();
 
         public List<int> spalten;
         public List<int> sortierung;
@@ -81,13 +91,20 @@ namespace Nas_Suchen
         public List<int> verknuepfung;
         public List<int> klammer2;
 
-        MySql.Data.MySqlClient.MySqlConnection dbconnection = new MySql.Data.MySqlClient.MySqlConnection();
+        //MySql.Data.MySqlClient.NpgsqlConnection dbconnection = new MySql.Data.MySqlClient.NpgsqlConnection();
+        NpgsqlConnection dbconnection = new NpgsqlConnection();
+        NpgsqlConnection dbconnection_sm = new NpgsqlConnection();
 
-        string def_select = "SELECT mf.filename, mf.pathname, mf.interpret, cast(mf.year AS char), mf.album, mf.genre, et.description, DATE_FORMAT(mf.added, '%d-%m-%Y')," +
-                "  mf.ext_char, DATE_FORMAT(mf.aufnahme_datum, '%d-%m-%Y %H:%i'), mf.source " +
-                " ,COUNT(*) OVER(), mf.latitude, mf.longitude, mf.size_bytes, length(mf.thumbnail) FROM Media.media_files mf LEFT JOIN Media.media_types et ON(et.m_key = mf.extension) where mf.pathname = '\\\\sm-nas3\\Multimedia' ";
+        string sql_base = "SELECT mf.filename, mf.pathname, mf.interpret, mf.year, mf.album, mf.genre, et.description, mf.added, mf.ext_char, mf.aufnahme_datum, mf.source, COUNT(*) OVER(), " +
+                          "mf.latitude, mf.longitude, mf.size_bytes, length(mf.thumbnail), mf.id, mf.vector_created, fc.cnt " +
+                          "FROM public.media_files mf " +
+                          "LEFT JOIN public.media_types et ON(et.m_key = mf.extension) " +
+                          "LEFt JOIN(select count(*) as cnt, fv.id from public.face_vectors fv group by fv.id) fc on(fc.id = mf.id)";
+
+        string def_select = "";       
 
         string connect = "";
+
         public Nas_Suche()
         {
             InitializeComponent();
@@ -96,6 +113,14 @@ namespace Nas_Suchen
         private void Nas_Suche_Load(object sender, EventArgs e)
         {
             Cursor.Current = Cursors.WaitCursor;
+
+            u_codes = new List<List<string[]>>(Usercodes.Length);
+            for (int i = 0; i < Usercodes.Length; i++)
+            {
+                u_codes.Add(new List<string[]>());
+            }
+
+            def_select = sql_base + " where mf.pathname = '\\\\sm-nas3\\Multimedia' ";
 
             Form credent = new db_Login();
             credent.StartPosition = FormStartPosition.Manual;
@@ -116,8 +141,7 @@ namespace Nas_Suchen
             if (Environment.OSVersion.Version.Build < 22000)
             {
                 // Windows 10
-                connect = $"server = {Globals1.D_server}; port = {Globals1.D_port}; Database = {Globals1.D_db}; uid = {Globals1.D_user}; pwd = {Globals1.D_pw}; Charset = utf8;" +
-                                 "SslMode = VerifyCA; SslCa = C:\\Certificate\\ca-cert.pem";
+                connect = $"Host={Globals1.D_server};Port={Globals1.D_port};Database={Globals1.D_db};Username={Globals1.D_user};Password={Globals1.D_pw};Search Path=sm;";
             }
             else
             {
@@ -125,16 +149,14 @@ namespace Nas_Suchen
                 {
                     // Windows 11
                     ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls13;
-                    connect = $"server={Globals1.D_server}; port={Globals1.D_port}; Database={Globals1.D_db}; uid={Globals1.D_user}; pwd={Globals1.D_pw}; Charset = utf8;TlsVersion=TlSv1.3;" +
-                              "SslMode = VerifyFull; SslCa = C:\\Certificate\\ca-cert.pem;SslCert=C:\\Certificate\\client-cert.pem;SslKey=C:\\Certificate\\client-key.pem;";
+                    connect = $"Host={Globals1.D_server};Port={Globals1.D_port};Database={Globals1.D_db};Username={Globals1.D_user};Password={Globals1.D_pw};Search Path=sm;";
                     //     "SslMode = VerifyCA; SslMode=Required"
                 }
                 else
                 {
                     // Windows 11
                     ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls13;
-                    connect = $"server={Globals1.D_server}; port={Globals1.D_port}; Database={Globals1.D_db}; uid={Globals1.D_user}; pwd=''; Charset = utf8;TlsVersion=Tlsv1.3;" +
-                              "SslMode=VerifyCA;SslCa=C:\\Certificate\\ca-cert.pem;SslCert=C:\\Certificate\\client-cert.pem;SslKey=C:\\Certificate\\client-key.pem;";
+                    connect = $"Host={Globals1.D_server};Port={Globals1.D_port};Database={Globals1.D_db};Username={Globals1.D_user};Password={Globals1.D_pw};Search Path=sm;";
                     //     "SslMode = VerifyCA; SslMode=Required"
                 }
             }
@@ -142,14 +164,18 @@ namespace Nas_Suchen
             dbconnection.ConnectionString = connect;
             dbconnection.Open();
 
-            //using (var cmd = new MySqlCommand("SET GLOBAL max_allowed_packet = 1024*1024*1024;", dbconnection))          
-            //using (var cmd = new MySqlCommand("SET SESSION net_read_timeout=60000, net_write_timeout=60000;", dbconnection))
+            string connect_sm = connect.Replace("Database=" + Globals1.D_db + ";", "Database=sm;");
+            dbconnection_sm.ConnectionString = connect_sm;
+            dbconnection_sm.Open();
+
+            //using (var cmd = new NpgsqlCommand("SET GLOBAL max_allowed_packet = 1024*1024*1024;", dbconnection))          
+            //using (var cmd = new NpgsqlCommand("SET SESSION net_read_timeout=60000, net_write_timeout=60000;", dbconnection))
 
             this.Text = this.Text + $"  / DB-Server: {Globals1.D_server}:{Globals1.D_port} " + dbconnection.ServerVersion + " Database: " + dbconnection.Database;
 
-            using (var cmd = new MySqlCommand("SHOW SESSION STATUS LIKE 'Ssl_cipher'", dbconnection))
+      /*      using (var cmd = new NpgsqlCommand("SHOW SESSION STATUS LIKE 'Ssl_cipher'", dbconnection))
             {
-                MySqlDataReader reader = cmd.ExecuteReader();
+                NpgsqlDataReader reader = cmd.ExecuteReader();
                 {
                     while (reader.Read())
                     {
@@ -160,9 +186,9 @@ namespace Nas_Suchen
                 }
             }
 
-            using (var cmd = new MySqlCommand("SHOW SESSION STATUS LIKE 'Ssl_version';", dbconnection))
+            using (var cmd = new NpgsqlCommand("SHOW SESSION STATUS LIKE 'Ssl_version';", dbconnection))
             {
-                MySqlDataReader reader = cmd.ExecuteReader();
+                NpgsqlDataReader reader = cmd.ExecuteReader();
                 {
                     while (reader.Read())
                     {
@@ -171,11 +197,11 @@ namespace Nas_Suchen
                     }
                     reader.Close();
                 }
-            }
+            }*/
 
-            using (var cmd = new MySqlCommand("select count(*) from media_files", dbconnection))
+            using (var cmd = new NpgsqlCommand("select count(*) from public.media_files", dbconnection))
             {
-                MySqlDataReader reader = cmd.ExecuteReader();
+                NpgsqlDataReader reader = cmd.ExecuteReader();
                 reader.Read();
                 this.Text = this.Text + "  Anzahl Datensätze: " + reader.GetInt32(0);
                 reader.Close();
@@ -189,20 +215,71 @@ namespace Nas_Suchen
 
             Renumber_Grid(dataGridView1);
             rearrange();
+            LoadUserCodes();
             Cursor.Current = Cursors.Default;
+        }
+        private void LoadUserCodes()
+        {
+            for (int idx = 0; idx < Usercodes.Length; idx++)
+            {
+                // Hier kommt die Liste rein, die später gefüllt wird:
+                List<string[]> row = u_codes[idx];
+
+                // Usercode nicht relevant → einfach überspringen
+                if (Usercodes[idx] == 0)
+                    continue;
+
+                string sql;
+
+                if (Usercodes[idx] > 0)
+                {
+                    sql = "select codetyp_c, code_beschreib from sm.usercodes where codetyp_i = " + Usercodes[idx] + " and sprache = 'german'";
+                    using var cmd = new NpgsqlCommand(sql, dbconnection_sm);
+                    using var rdr = cmd.ExecuteReader();
+                    while (rdr.Read())
+                    {
+                        string s_c = rdr.GetString(0);
+                        string s_b = rdr.GetString(1);
+
+                        // neues Paar in die richtige Zeile hängen
+                        row.Add(new string[] { s_c, s_b });
+                    }
+                    rdr.Close();
+                }
+                else if (Usercodes[idx] == -1)
+                {
+                    sql = "select CAST(m_key AS CHAR), description from public.media_types order by description";
+                    using var cmd = new NpgsqlCommand(sql, dbconnection);
+                    using var rdr = cmd.ExecuteReader();
+                    while (rdr.Read())
+                    {
+                        string s_c = rdr.GetString(0);
+                        string s_b = rdr.GetString(1);
+
+                        // neues Paar in die richtige Zeile hängen
+                        row.Add(new string[] { s_c, s_b });
+                    }
+                    rdr.Close();
+                }
+                else
+                {
+                    // unbekannter Typ → überspringen
+                    continue;
+                }                
+            }
         }
 
         private void InitializeLists()
         {
-            spalten = new List<int> { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 };
-            sortierung = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-            conditions = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0 };
-            filtering = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-            filterkeys = new List<string> { "", "", "", "", "", "", "", "", "", "", "0", "", "", "", "" };
+            spalten = new List<int> { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 };
+            sortierung = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+            conditions = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 };
+            filtering = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+            filterkeys = new List<string> { "", "", "", "", "", "", "", "", "", "", "0", "", "", "", "", "", "", "" };
 
-            klammer1 = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-            verknuepfung = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-            klammer2 = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+            klammer1 = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+            verknuepfung = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+            klammer2 = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
         }
 
         void Renumber_Grid(DataGridView g)
@@ -241,15 +318,17 @@ namespace Nas_Suchen
                 {   // Integer
                     if (Usercodes[i] <= 0)
                     {
+                        string zfmt = "N0";
+                        if (i == Media_year) zfmt = "";
                         var col = new DataGridViewTextBoxColumn
                         {
                             Name = Spalten_namen[i],
                             ValueType = typeof(int),
                             ReadOnly = true,
                             DefaultCellStyle =
-                            {
+                            {                              
+                                Format = zfmt,
                                 Alignment = DataGridViewContentAlignment.MiddleRight,
-                                Format = "N0",
                                 FormatProvider = new System.Globalization.CultureInfo("de-DE")
                             }
                         };
@@ -265,8 +344,9 @@ namespace Nas_Suchen
                         };
 
                         string usercode_read = "SELECT codetyp_c, code_beschreib FROM sm.usercodes WHERE codetyp_i = @codetyp AND sprache = 'german'";
-                        using var cmd1 = new MySqlCommand(usercode_read, dbconnection);
-                        cmd1.Parameters.AddWithValue("@codetyp", Usercodes[i].ToString());
+                        using var cmd1 = new NpgsqlCommand(usercode_read, dbconnection_sm);
+                        //cmd1.Parameters.AddWithValue("@codetyp", Usercodes[i].ToString());
+                        cmd1.Parameters.AddWithValue("codetyp", Usercodes[i]);
 
                         using var rdr = cmd1.ExecuteReader();
                         while (rdr.Read())
@@ -320,7 +400,7 @@ namespace Nas_Suchen
                         Name = Spalten_namen[i],
                         ValueType = typeof(DateTime),
                         ReadOnly = true,
-                        DefaultCellStyle = { Format = "dd.MM.yyyy" }
+                        DefaultCellStyle = { Format = "dd.MM.yyyy mm:ss" }
                     });
                 }
                 if (i == Media_image - 1)
@@ -344,7 +424,7 @@ namespace Nas_Suchen
 
             string query = "SELECT LOAD_FILE(@filePath)";
 
-            using (var cmd = new MySqlCommand(query, dbconnection))
+            using (var cmd = new NpgsqlCommand(query, dbconnection))
             {
                 cmd.Parameters.AddWithValue("@filePath", pathname);
                 cmd.CommandTimeout = 300;
@@ -365,24 +445,53 @@ namespace Nas_Suchen
             }
         }
 
+        private Image LoadImageFromNas(string filename, string pathname)
+        {
+            pathname = pathname.Replace("\\", "/");
+            pathname = pathname.Replace("//sm-nas3", "/share");
+            pathname = pathname + "/" + filename;
+
+            const string query = "SELECT LOAD_FILE(@filePath)";
+
+            using (var cmd = new NpgsqlCommand(query, dbconnection))
+            {
+                cmd.Parameters.AddWithValue("@filePath", pathname);
+                cmd.CommandTimeout = 300;
+
+                object result = cmd.ExecuteScalar();
+
+                if (result == null || result == DBNull.Value)
+                    return null;
+
+                byte[] bytes = (byte[])result;
+
+                using (var ms = new MemoryStream(bytes))
+                {
+                    return Image.FromStream(ms);
+                }
+            }
+        }
+
         private void FillDataGridMedia(string sql_select)
         {
-            var cmd1 = new MySqlCommand("", dbconnection);
+            var cmd1 = new NpgsqlCommand("", dbconnection);
             if (sql_select != "")
             {
                 //sql_select = sql_select.Replace(@"\", @"\\");
-                cmd1 = new MySqlCommand(sql_select, dbconnection);
+                cmd1 = new NpgsqlCommand(sql_select, dbconnection);
             }
             else
             {
                 string numbers = new string(txt_records.Text.Where(char.IsDigit).ToArray());
-                cmd1 = new MySqlCommand("SELECT mf.filename, mf.pathname, mf.interpret, cast(mf.year AS char), mf.album, mf.genre, et.description, " +
-                    "DATE_FORMAT(mf.added, '%d-%m-%Y'), mf.ext_char, DATE_FORMAT(mf.aufnahme_datum, '%d-%m-%Y %H:%i'), mf.source,  COUNT(*) OVER(), mf.latitude, " +
+                cmd1 = new NpgsqlCommand(sql_base + " where mf.pathname = '\\\\sm-nas3\\Multimedia' LIMIT " + numbers + " ", dbconnection);
+
+     /*           cmd1 = new NpgsqlCommand("SELECT mf.filename, mf.pathname, mf.interpret, mf.year, mf.album, mf.genre, et.description, " +
+                    "mf.added, mf.ext_char, mf.aufnahme_datum, mf.source,  COUNT(*) OVER(), mf.latitude, " +
                     "mf.longitude, mf.size_bytes, length(mf.thumbnail) " +
                     "FROM Media.media_files mf LEFT JOIN Media.media_types et ON(et.m_key = mf.extension) " +
-                    "where mf.pathname = '\\\\sm-nas3\\Multimedia' LIMIT " + numbers + " ", dbconnection);
+                    "where mf.pathname = '\\\\sm-nas3\\Multimedia' LIMIT " + numbers + " ", dbconnection);*/
             }
-            MySqlDataReader rdr = cmd1.ExecuteReader();
+            NpgsqlDataReader rdr = cmd1.ExecuteReader();
 
             dataGridView1.Rows.Clear();
             int anz = 0;
@@ -390,16 +499,16 @@ namespace Nas_Suchen
             {
                 anz++;
                 dataGridView1.Rows.Add();
-                FillDataGridHandleNull(dataGridView1, rdr, 0, Media_name, (int)Globals.DBtypen.db_string);
-                FillDataGridHandleNull(dataGridView1, rdr, 1, Media_pfad, (int)Globals.DBtypen.db_string);
-                FillDataGridHandleNull(dataGridView1, rdr, 2, Media_interpret, (int)Globals.DBtypen.db_string);
-                FillDataGridHandleNull(dataGridView1, rdr, 3, Media_year, (int)Globals.DBtypen.db_int32);
-                FillDataGridHandleNull(dataGridView1, rdr, 4, Media_album, (int)Globals.DBtypen.db_string);
-                FillDataGridHandleNull(dataGridView1, rdr, 5, Media_genre, (int)Globals.DBtypen.db_string);
-                FillDataGridHandleNull(dataGridView1, rdr, 6, Media_ext, (int)Globals.DBtypen.db_string);
-                FillDataGridHandleNull(dataGridView1, rdr, 7, Media_added, (int)Globals.DBtypen.db_string);
-                FillDataGridHandleNull(dataGridView1, rdr, 8, Media_fileext, (int)Globals.DBtypen.db_string);
-                FillDataGridHandleNull(dataGridView1, rdr, 9, Media_aufnahme_datum, (int)Globals.DBtypen.db_string);
+                FillDataGridHandleNull(dataGridView1, rdr, 0, Media_name, DBtypen[Media_name]);
+                FillDataGridHandleNull(dataGridView1, rdr, 1, Media_pfad, DBtypen[Media_pfad]);
+                FillDataGridHandleNull(dataGridView1, rdr, 2, Media_interpret, DBtypen[Media_interpret]);
+                FillDataGridHandleNull(dataGridView1, rdr, 3, Media_year, DBtypen[Media_year]);
+                FillDataGridHandleNull(dataGridView1, rdr, 4, Media_album, DBtypen[Media_album]);
+                FillDataGridHandleNull(dataGridView1, rdr, 5, Media_genre, DBtypen[Media_genre]);
+                FillDataGridHandleNull(dataGridView1, rdr, 6, Media_ext,  DBtypen[Media_ext]);
+                FillDataGridHandleNull(dataGridView1, rdr, 7, Media_added, DBtypen[Media_added]);
+                FillDataGridHandleNull(dataGridView1, rdr, 8, Media_fileext, DBtypen[Media_fileext]);
+                FillDataGridHandleNull(dataGridView1, rdr, 9, Media_aufnahme_datum, DBtypen[Media_aufnahme_datum]);
 
                 DataGridViewComboBoxCell comboBoxCell = dataGridView1[Media_source, dataGridView1.RowCount - 1] as DataGridViewComboBoxCell;
                 if (kfiletypen.IndexOf(rdr.GetInt32(10).ToString()) >= 0)
@@ -408,23 +517,20 @@ namespace Nas_Suchen
                     comboBoxCell.Value = kfiletypen_t[kfiletypen.IndexOf(rdr.GetInt32(10).ToString())];
                 }
 
-                FillDataGridHandleNull(dataGridView1, rdr, 12, Media_latitude, (int)Globals.DBtypen.db_decimal);
-                FillDataGridHandleNull(dataGridView1, rdr, 13, Media_longitude, (int)Globals.DBtypen.db_decimal);
-                FillDataGridHandleNull(dataGridView1, rdr, 14, Media_size_bytes, (int)Globals.DBtypen.db_int64);
-                FillDataGridHandleNull(dataGridView1, rdr, 15, Media_thumbnail_size, (int)Globals.DBtypen.db_int32);
-            }
-            if (anz > 0)
-            {
+                FillDataGridHandleNull(dataGridView1, rdr, 12, Media_latitude, DBtypen[Media_latitude -1]);
+                FillDataGridHandleNull(dataGridView1, rdr, 13, Media_longitude, DBtypen[Media_longitude -1]);
+                FillDataGridHandleNull(dataGridView1, rdr, 14, Media_size_bytes, DBtypen[Media_size_bytes -1]);
+                FillDataGridHandleNull(dataGridView1, rdr, 15, Media_thumbnail_size, DBtypen[Media_thumbnail_size - 1]);
+                FillDataGridHandleNull(dataGridView1, rdr, 16, Media_person_nr, DBtypen[Media_person_nr - 1]);  
+                FillDataGridHandleNull(dataGridView1, rdr, 17, Media_face_scan_date, DBtypen[Media_face_scan_date - 1]);        
+                FillDataGridHandleNull(dataGridView1, rdr, 18, Media_face_scan_count, DBtypen[Media_face_scan_count - 1]);
                 txt_max_recs.Text = rdr.GetInt32(Media_source).ToString();
             }
-            else
-            {
-                txt_max_recs.Text = "0";
-            }
+            if (anz <= 0) { txt_max_recs.Text = "0"; }
             rdr.Close();
         }
 
-        void FillDataGridHandleNull(DataGridView g, MySqlDataReader r, int selpos, int gridpos, int d_type)
+        void FillDataGridHandleNull(DataGridView g, NpgsqlDataReader r, int selpos, int gridpos, int d_type)
         {
             if (d_type == (int)Globals.DBtypen.db_string) { if (r.IsDBNull(selpos) == false) { g[gridpos, g.RowCount - 1].Value = r.GetString(selpos); } }
             if (d_type == (int)Globals.DBtypen.db_decimal) { if (r.IsDBNull(selpos) == false) { g[gridpos, g.RowCount - 1].Value = r.GetDecimal(selpos); } }
@@ -506,6 +612,11 @@ namespace Nas_Suchen
             txt_max_recs.Width = w / 2 - 3;
             txt_max_recs.Top = lbl_records.Top;
             txt_max_recs.Left = lbl_max_recs.Left + lbl_max_recs.Width + dist + 3;
+
+            chk_original.Height = h;
+            chk_original.Width = w / 2 - 3;
+            chk_original.Top = btn_close.Top +3;
+            chk_original.Left = btn_close.Left - btn_close.Width - dist;
         }
 
         private void btn_sort_Click(object sender, EventArgs e)
@@ -516,6 +627,7 @@ namespace Nas_Suchen
                 Felder_z = felder_z,
                 Db_typen = DBtypen,
                 Usercode = Usercodes,
+                UCodes = u_codes,      /* fertiges Array mit den bereits aus der DB eingelesenen Werten */
 
                 Spalten = spalten,
                 Sortierung = sortierung,
@@ -530,10 +642,7 @@ namespace Nas_Suchen
                 Tabelle = "Media.media_files",
                 Tabelle_media_types = "Media.media_types",
                 Tabelle_ucodes = "sm.usercodes",
-                Sqlsort = "SELECT mf.filename, mf.pathname, mf.interpret, cast(mf.year AS char), mf.album, mf.genre, et.description, DATE_FORMAT(mf.added, '%d-%m-%Y')," +
-                          "  mf.ext_char, DATE_FORMAT(mf.aufnahme_datum, '%d-%m-%Y %H:%i'), mf.source " +
-                          " ,COUNT(*) OVER(), mf.latitude, mf.longitude, mf.size_bytes, length(mf.thumbnail) FROM Media.media_files mf " +
-                          " LEFT JOIN Media.media_types et ON(et.m_key = mf.extension) ",
+                Sqlsort = sql_base,
                 StartPosition = FormStartPosition.Manual,
 
                 Sort_cancel = "Cancel",
@@ -612,10 +721,10 @@ namespace Nas_Suchen
         }
         void GetThumbnailFromDatabase(int zeile)
         {
-            var cmd1 = new MySqlCommand("select thumbnail from media_files where filename = @filename and pathname = @pathname", dbconnection);
+            var cmd1 = new NpgsqlCommand("select thumbnail from media_files where filename = @filename and pathname = @pathname", dbconnection);
             cmd1.Parameters.AddWithValue("@filename", dataGridView1[Media_name, zeile].Value.ToString());
             cmd1.Parameters.AddWithValue("@pathname", dataGridView1[Media_pfad, zeile].Value.ToString());
-            MySqlDataReader rdr = cmd1.ExecuteReader();
+            NpgsqlDataReader rdr = cmd1.ExecuteReader();
 
             if (rdr.Read())
             {
@@ -791,19 +900,58 @@ namespace Nas_Suchen
                         }
                     }
                 }
-                else if (e.ColumnIndex == Media_size_bytes)
+                else if (e.ColumnIndex == Media_face_scan_count)
                 {
-                    if (e.RowIndex < 0) return;
+                    var anz = dataGridView1.Rows[e.RowIndex].Cells[Media_face_scan_count].Value;
+                    if (anz == null) return;
+                    int anz1 = Convert.ToInt32(anz);
+                    if (anz1 <= 0) return;
 
-                    var imgObj = dataGridView1.Rows[e.RowIndex].Cells[Media_image].Value;
-                    if (imgObj == null) return;
+                    string filePath = dataGridView1.Rows[e.RowIndex].Cells[1].Value?.ToString();
+                    string fileName = dataGridView1.Rows[e.RowIndex].Cells[0].Value?.ToString();      
 
-                    Image img = imgObj as Image;
-                    if (img == null) return;
+                    Image img = null;
+                    if (chk_original.Checked != true) 
+                    {   // Preview aus der DB verwenden
+                        var imgObj = dataGridView1.Rows[e.RowIndex].Cells[Media_image].Value;
+                        if (imgObj == null)
+                        {
+                            var cmd1 = new NpgsqlCommand("select thumbnail from public.media_files where filename = @filename and pathname = @pathname", dbconnection);
+                            cmd1.Parameters.AddWithValue("@filename", fileName);
+                            cmd1.Parameters.AddWithValue("@pathname", filePath);
+                            NpgsqlDataReader rdr = cmd1.ExecuteReader();
 
-                    long id = 90653;
+                            if (rdr.Read())
+                            {
+                                if (rdr.IsDBNull(0) == false)
+                                {
+                                    byte[] thumbnailData = (byte[])rdr["thumbnail"];
+                                    if (thumbnailData.Length != 0)
+                                    {
+                                        MemoryStream ms = new MemoryStream(thumbnailData);                                    
+                                        img = Image.FromStream(ms);                                     
+                                    }
+                                }
+                            }
+                            rdr.Close();
+                            if (img == null) return;
+                        }
+                        else
+                        {
+                            img = imgObj as Image;
+                        }
+                    }
+                    else  
+                    {   //Original File verwenden               
+                        img = LoadImageFromNas(fileName, filePath);
+                    }
 
-                    using (var win = new FaceWindow(img, id, dbconnection))
+                    int origW = Convert.ToInt32(dataGridView1.Rows[e.RowIndex].Cells["Jahr"].Value);
+                    int origH = Convert.ToInt32(dataGridView1.Rows[e.RowIndex].Cells["Genre"].Value);
+
+                    var id1 = dataGridView1.Rows[e.RowIndex].Cells[Media_person_nr].Value;
+                    long id = Convert.ToInt64(id1);
+                    using (var win = new FaceWindow(img, id, dbconnection, origW, origH))
                     {
                         win.ShowDialog(this);
                     }
@@ -849,12 +997,14 @@ namespace Nas_Suchen
         "--> Preview: soferne eine Preview in der Datenbank verspeichert ist, wird diese mit der lokal verknüpften Applikation gestartet." + Environment.NewLine + Environment.NewLine +
         "--> Ordnertyp: ladet die entsprechende Datei vom Server mittels Datenbankzugriff in das lokale Downloadverzeichnis." + Environment.NewLine +
         "               User muss am Datenbankserver im entsprechenden Dateisystem zumindest Leserechte haben." + Environment.NewLine + Environment.NewLine +
-        "--> Breitengrad: wenn ein GEO-Tag abgespeichert ist, wird der Browser(Google-Maps) mit den entsprechenden Koordinaten geöffnet.";
+        "--> Breitengrad: wenn ein GEO-Tag abgespeichert ist, wird der Browser(Google-Maps) mit den entsprechenden Koordinaten geöffnet." + Environment.NewLine + Environment.NewLine +
+        "--> Gesichter: wenn Gesichts-Scans in der Datenbank vorhanden sind, wird ein Fenster mit den Scans geöffnet."
+        ;
 
             using (var dlg = new Form())
             {
                 dlg.Text = "Hilfe";
-                dlg.ClientSize = new Size(1000, 270);
+                dlg.ClientSize = new Size(1000, 300);
                 dlg.FormBorderStyle = FormBorderStyle.FixedDialog;
                 dlg.MaximizeBox = false;
                 dlg.MinimizeBox = false;

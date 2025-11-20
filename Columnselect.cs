@@ -15,8 +15,8 @@ namespace Nas_Suchen
         public ColumnSelectorForm(string[] columnNames, bool[] currentStates)
         {
             Text = "Spaltenauswahl";
-            Width = 300;
-            Height = 400;
+            Width = 250;
+            Height = 450;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterParent;
             MaximizeBox = false;
@@ -25,7 +25,7 @@ namespace Nas_Suchen
             checkedListBox = new CheckedListBox
             {
                 Dock = DockStyle.Top,
-                Height = 300,
+                Height = 350,
                 CheckOnClick = true
             };
 
@@ -37,17 +37,17 @@ namespace Nas_Suchen
                 Text = "OK",
                 DialogResult = DialogResult.OK,
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
-                Location = new Point(60, 320),
-                Size = new Size(80, 30)
+                Location = new Point(30, Height - 80),
+                Size = new Size(60, 20)
             };
 
             cancelButton = new Button
             {
-                Text = "Abbrechen",
+                Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
-                Location = new Point(160, 320),
-                Size = new Size(80, 30)
+                Location = new Point(130, Height - 80),
+                Size = new Size(60, 20)
             };
 
             Controls.Add(checkedListBox);

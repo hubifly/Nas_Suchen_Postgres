@@ -42,6 +42,7 @@
             lbl_max_recs = new Label();
             btn_help = new Button();
             btnColumnSelect = new Button();
+            chk_original = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)dataGridView1).BeginInit();
             SuspendLayout();
             // 
@@ -170,11 +171,22 @@
             btnColumnSelect.UseVisualStyleBackColor = true;
             btnColumnSelect.Click += btnColumnSelect_Click;
             // 
+            // chk_original
+            // 
+            chk_original.AutoSize = true;
+            chk_original.Location = new Point(992, 402);
+            chk_original.Name = "chk_original";
+            chk_original.Size = new Size(99, 19);
+            chk_original.TabIndex = 15;
+            chk_original.Text = "Original verw.";
+            chk_original.UseVisualStyleBackColor = true;
+            // 
             // Nas_Suche
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1188, 450);
+            Controls.Add(chk_original);
             Controls.Add(btnColumnSelect);
             Controls.Add(btn_help);
             Controls.Add(lbl_max_recs);
@@ -215,5 +227,6 @@
         private Label lbl_max_recs;
         private Button btn_help;
         private Button btnColumnSelect;
+        private CheckBox chk_original;
     }
 }
