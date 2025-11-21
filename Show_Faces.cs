@@ -95,7 +95,7 @@ namespace Nas_Suchen
                   ORDER BY number ASC";
 
             using var cmd = new NpgsqlCommand(sql, _db);
-            cmd.Parameters.AddWithValue("&id", _mediaId);
+            cmd.Parameters.AddWithValue("@id", _mediaId);
 
             var dt = new DataTable();
             dt.Columns.Add("number", typeof(int));

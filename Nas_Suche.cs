@@ -721,7 +721,7 @@ namespace Nas_Suchen
         }
         void GetThumbnailFromDatabase(int zeile)
         {
-            var cmd1 = new NpgsqlCommand("select thumbnail from media_files where filename = @filename and pathname = @pathname", dbconnection);
+            var cmd1 = new NpgsqlCommand("select thumbnail from public.media_files where filename = @filename and pathname = @pathname", dbconnection);
             cmd1.Parameters.AddWithValue("@filename", dataGridView1[Media_name, zeile].Value.ToString());
             cmd1.Parameters.AddWithValue("@pathname", dataGridView1[Media_pfad, zeile].Value.ToString());
             NpgsqlDataReader rdr = cmd1.ExecuteReader();
