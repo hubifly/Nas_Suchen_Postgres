@@ -548,12 +548,6 @@ namespace Nas_Suchen
             {
                 string numbers = new string(txt_records.Text.Where(char.IsDigit).ToArray());
                 cmd1 = new NpgsqlCommand(sql_base + " where mf.pathname = '\\\\sm-nas3\\Multimedia' LIMIT " + numbers + " ", dbconnection);
-
-     /*           cmd1 = new NpgsqlCommand("SELECT mf.filename, mf.pathname, mf.interpret, mf.year, mf.album, mf.genre, et.description, " +
-                    "mf.added, mf.ext_char, mf.aufnahme_datum, mf.source,  COUNT(*) OVER(), mf.latitude, " +
-                    "mf.longitude, mf.size_bytes, length(mf.thumbnail) " +
-                    "FROM Media.media_files mf LEFT JOIN Media.media_types et ON(et.m_key = mf.extension) " +
-                    "where mf.pathname = '\\\\sm-nas3\\Multimedia' LIMIT " + numbers + " ", dbconnection);*/
             }
             NpgsqlDataReader rdr = cmd1.ExecuteReader();
 
