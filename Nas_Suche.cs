@@ -1,12 +1,12 @@
 ﻿using System.Data;
 using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
-
 using System.Net;
+using System.Text;
+using Npgsql;
 //using MySql.Data.MySqlClient;
 using Sort_Dialog;
 using static System.ComponentModel.Design.ObjectSelectorEditor;
-using Npgsql;
 
 namespace Nas_Suchen
 {
@@ -417,33 +417,45 @@ namespace Nas_Suchen
 
         private void loadFileFromNas(string filename, string pathname)
         {
-            pathname = pathname.Replace("\\", "/");
-            pathname = pathname.Replace("//sm-nas3", "/share");
-            pathname = pathname + "/" + filename;
-            //MessageBox.Show(pathname);
-
-            string query = "SELECT LOAD_FILE(@filePath)";
-
-            using (var cmd = new NpgsqlCommand(query, dbconnection))
+            try
             {
-                cmd.Parameters.AddWithValue("@filePath", pathname);
-                cmd.CommandTimeout = 300;
-                object result = cmd.ExecuteScalar();
+                // Pfad vereinheitlichen
+                pathname = pathname.Replace("\\", "/");
+                pathname = pathname.Replace("//sm-nas3", "");   // nicht mehr benötigt
+                pathname = pathname.TrimStart('/');
 
-                if (result != null && result != DBNull.Value)
-                {
-                    byte[] fileBytes = (byte[])result;
-                    string downloadPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", filename);
-                    //MessageBox.Show(downloadPath);
-                    File.WriteAllBytes(downloadPath, fileBytes);
-                    MessageBox.Show(downloadPath + " " + (fileBytes.Length) / (1024 * 1024) + " MB downloaded successfully.");
-                }
-                else
-                {
-                    MessageBox.Show(filename + " Download hat nicht geklappt!");
-                }
+                // finaler Pfad für das API
+                string apiPath = pathname + "/" + filename;
+
+                // NAS-API-Basisadresse
+                string baseUrl = $"http://{Globals1.D_server_lan}:8188";
+
+                using var client = new HttpClient();
+
+                // Anfrage an dein eigenes REST-API
+                string url = $"{baseUrl}/file?path={System.Web.HttpUtility.UrlEncode(apiPath)}";
+
+                byte[] fileBytes = client.GetByteArrayAsync(url).Result;
+
+                // Datei speichern
+                string downloadPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    "Downloads",
+                    filename
+                );
+
+                File.WriteAllBytes(downloadPath, fileBytes);
+
+                MessageBox.Show($"{downloadPath} {(fileBytes.Length / (1024 * 1024))} MB downloaded successfully.");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Fehler: " + ex.Message);
             }
         }
+
+
+
 
         private Image LoadImageFromNas(string filename, string pathname)
         {
