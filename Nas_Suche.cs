@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
 using System.Net;
 using System.Text;
+using System.Web;
 using Npgsql;
 //using MySql.Data.MySqlClient;
 using Sort_Dialog;
@@ -51,7 +52,7 @@ namespace Nas_Suchen
         // Spaltenüberschriften für Sort und Suchen-Dialog   
 
         string[] felder_z = { "mf.filename", "mf.pathname", "mf.interpret", "mf.year", "mf.album", "mf.genre", "mf.extension", "mf.ext_char", "mf.added",
-                              "mf.aufnahme_datum", "mf.source", "mf.latitude", "mf.longitude", "mf.size_bytes", "length(mf.thumbnail)", "mf.id", "mf.vector_created", "fc.cnt" };
+                              "mf.aufnahme_datum", "mf.source", "mf.latitude", "mf.longitude", "mf.size_bytes", "mf.thumbnail_length", "mf.id", "mf.vector_created", "mf.face_count" };
         // Spaltennamen in der Datenbank   
 
         // Typen in den jeweiligen Spalten in der DB
@@ -95,11 +96,9 @@ namespace Nas_Suchen
         NpgsqlConnection dbconnection = new NpgsqlConnection();
         NpgsqlConnection dbconnection_sm = new NpgsqlConnection();
 
-        string sql_base = "SELECT mf.filename, mf.pathname, mf.interpret, mf.year, mf.album, mf.genre, et.description, mf.added, mf.ext_char, mf.aufnahme_datum, mf.source, COUNT(*) OVER(), " +
-                          "mf.latitude, mf.longitude, mf.size_bytes, length(mf.thumbnail), mf.id, mf.vector_created, fc.cnt " +
-                          "FROM public.media_files mf " +
-                          "LEFT JOIN public.media_types et ON(et.m_key = mf.extension) " +
-                          "LEFt JOIN(select count(*) as cnt, fv.id from public.face_vectors fv group by fv.id) fc on(fc.id = mf.id)";
+        string sql_base = "SELECT mf.filename, mf.pathname, mf.interpret, mf.year, mf.album, mf.genre, mf.description, mf.added, mf.ext_char, mf.aufnahme_datum, mf.source, mf.total_count, " +
+                          "mf.latitude, mf.longitude, mf.size_bytes, mf.thumbnail_length, mf.id, mf.vector_created, mf.face_count " +
+                          "FROM public.vw_media_complete mf";
 
         string def_select = "";       
 
@@ -415,47 +414,100 @@ namespace Nas_Suchen
             }
         }
 
+
         private void loadFileFromNas(string filename, string pathname)
         {
             try
             {
-                // Pfad vereinheitlichen
+                // ----------------------------------------------------
+                // 1) Pfad aufbereiten → relativer NAS-Pfad für API
+                //    //sm-nas3/Multimedia/...  →  Multimedia/...
+                // ----------------------------------------------------
                 pathname = pathname.Replace("\\", "/");
-                pathname = pathname.Replace("//sm-nas3", "");   // nicht mehr benötigt
-                pathname = pathname.TrimStart('/');
 
-                // finaler Pfad für das API
-                string apiPath = pathname + "/" + filename;
+                if (pathname.StartsWith("//sm-nas3/", StringComparison.OrdinalIgnoreCase))
+                    pathname = pathname.Substring("//sm-nas3/".Length);
 
-                // NAS-API-Basisadresse
-                string baseUrl = $"http://{Globals1.D_server_lan}:8188";
+                if (pathname.StartsWith("/share/", StringComparison.OrdinalIgnoreCase))
+                    pathname = pathname.Substring("/share/".Length);
 
-                using var client = new HttpClient();
+                pathname = pathname.Trim('/');
 
-                // Anfrage an dein eigenes REST-API
-                string url = $"{baseUrl}/file?path={System.Web.HttpUtility.UrlEncode(apiPath)}";
+                string apiPath = string.IsNullOrEmpty(pathname)
+                    ? filename
+                    : pathname + "/" + filename;
 
-                byte[] fileBytes = client.GetByteArrayAsync(url).Result;
+                string lanIp = Globals1.D_server_lan;      // z.B. 192.168.1.22
+                string wanHost = Globals1.D_QNAP_Cloud_id;   // z.B. smnas3.myqnapcloud.com
 
-                // Datei speichern
-                string downloadPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    "Downloads",
-                    filename
-                );
+                string baseUrl;
 
-                File.WriteAllBytes(downloadPath, fileBytes);
+                // ----------------------------------------------------
+                // 2) Nur beim ersten Aufruf: LAN / WAN ermitteln
+                //    Wir missbrauchen NasSid als "bereits geprüft"-Flag.
+                // ----------------------------------------------------
+                if (Globals1.NasSid == null)
+                {
+                    bool isLan;
 
-                MessageBox.Show($"{downloadPath} {(fileBytes.Length / (1024 * 1024))} MB downloaded successfully.");
+                    try
+                    {
+                        using (var test = new HttpClient { Timeout = TimeSpan.FromMilliseconds(800) })
+                        {
+                            // Health-Check-Endpunkt im API:
+                            // @app.get("/health")
+                            // def health(): return {"status": "ok"}
+                            var probe = test.GetAsync($"http://{lanIp}:8188/health");
+                            probe.Wait();
+                            isLan = probe.Result.IsSuccessStatusCode;
+                        }
+                    }
+                    catch
+                    {
+                        isLan = false;
+                    }
+
+                    Globals1.Nas_local = isLan ? 1 : 0;
+                    Globals1.NasSid = "checked";   // nur noch als Marker benutzt
+                }
+
+                baseUrl = (Globals1.Nas_local == 1)
+                    ? $"http://{lanIp}:8188"
+                    : $"https://{wanHost}:8188";
+
+                // ----------------------------------------------------
+                // 3) Streaming-Download über REST-API
+                // ----------------------------------------------------
+                string url = $"{baseUrl}/file?path={HttpUtility.UrlEncode(apiPath)}";
+
+                using (var client = new HttpClient())
+                using (var response = client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).Result)
+                {
+                    response.EnsureSuccessStatusCode();
+
+                    string downloadPath = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                        "Downloads",
+                        filename
+                    );
+
+                    using (var responseStream = response.Content.ReadAsStreamAsync().Result)
+                    using (var fileStream = File.Create(downloadPath))
+                    {
+                        responseStream.CopyTo(fileStream);
+                    }
+
+                    long bytes = new FileInfo(downloadPath).Length;
+                    long mb = bytes / (1024 * 1024);
+
+                    MessageBox.Show($"{downloadPath} {mb} MB downloaded successfully.");
+                }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Fehler: " + ex.Message);
+                MessageBox.Show("Fehler beim NAS-Download: " + ex.Message);
             }
         }
-
-
-
 
         private Image LoadImageFromNas(string filename, string pathname)
         {
