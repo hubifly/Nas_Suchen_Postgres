@@ -96,7 +96,7 @@ namespace Nas_Suchen
         NpgsqlConnection dbconnection = new NpgsqlConnection();
         NpgsqlConnection dbconnection_sm = new NpgsqlConnection();
 
-        string sql_base = "SELECT mf.filename, mf.pathname, mf.interpret, mf.year, mf.album, mf.genre, mf.description, mf.added, mf.ext_char, mf.aufnahme_datum, mf.source, mf.total_count, " +
+        string sql_base = "SELECT mf.filename, mf.pathname, mf.interpret, mf.year, mf.album, mf.genre, mf.description, mf.added, mf.ext_char, mf.aufnahme_datum, mf.source, count(*) OVER (), " +
                           "mf.latitude, mf.longitude, mf.size_bytes, mf.thumbnail_length, mf.id, mf.vector_created, mf.face_count " +
                           "FROM public.vw_media_complete mf";
 
@@ -198,7 +198,7 @@ namespace Nas_Suchen
                 }
             }*/
 
-            using (var cmd = new NpgsqlCommand("select count(*) from public.media_files", dbconnection))
+            using (var cmd = new NpgsqlCommand("select count(*) from public.vw_media_complete", dbconnection))
             {
                 NpgsqlDataReader reader = cmd.ExecuteReader();
                 reader.Read();
@@ -415,13 +415,12 @@ namespace Nas_Suchen
         }
 
 
-        private void loadFileFromNas(string filename, string pathname)
+        private Image LoadFileFromNas(string filename, string pathname, string mode)
         {
             try
             {
                 // ----------------------------------------------------
-                // 1) Pfad aufbereiten → relativer NAS-Pfad für API
-                //    //sm-nas3/Multimedia/...  →  Multimedia/...
+                // 1) Pfad normalisieren (wie bisher)
                 // ----------------------------------------------------
                 pathname = pathname.Replace("\\", "/");
 
@@ -437,14 +436,11 @@ namespace Nas_Suchen
                     ? filename
                     : pathname + "/" + filename;
 
-                string lanIp = Globals1.D_server_lan;      // z.B. 192.168.1.22
-                string wanHost = Globals1.D_QNAP_Cloud_id;   // z.B. smnas3.myqnapcloud.com
-
-                string baseUrl;
+                string lanIp = Globals1.D_server_lan;
+                string wanHost = Globals1.D_QNAP_Cloud_id;
 
                 // ----------------------------------------------------
-                // 2) Nur beim ersten Aufruf: LAN / WAN ermitteln
-                //    Wir missbrauchen NasSid als "bereits geprüft"-Flag.
+                // 2) LAN/WAN nur beim ersten Mal testen
                 // ----------------------------------------------------
                 if (Globals1.NasSid == null)
                 {
@@ -454,12 +450,8 @@ namespace Nas_Suchen
                     {
                         using (var test = new HttpClient { Timeout = TimeSpan.FromMilliseconds(800) })
                         {
-                            // Health-Check-Endpunkt im API:
-                            // @app.get("/health")
-                            // def health(): return {"status": "ok"}
-                            var probe = test.GetAsync($"http://{lanIp}:8188/health");
-                            probe.Wait();
-                            isLan = probe.Result.IsSuccessStatusCode;
+                            var probe = test.GetAsync($"http://{lanIp}:8188/health").Result;
+                            isLan = probe.IsSuccessStatusCode;
                         }
                     }
                     catch
@@ -468,15 +460,15 @@ namespace Nas_Suchen
                     }
 
                     Globals1.Nas_local = isLan ? 1 : 0;
-                    Globals1.NasSid = "checked";   // nur noch als Marker benutzt
+                    Globals1.NasSid = "done";    // Marker
                 }
 
-                baseUrl = (Globals1.Nas_local == 1)
+                string baseUrl = (Globals1.Nas_local == 1)
                     ? $"http://{lanIp}:8188"
                     : $"https://{wanHost}:8188";
 
                 // ----------------------------------------------------
-                // 3) Streaming-Download über REST-API
+                // 3) Download-URL
                 // ----------------------------------------------------
                 string url = $"{baseUrl}/file?path={HttpUtility.UrlEncode(apiPath)}";
 
@@ -485,29 +477,43 @@ namespace Nas_Suchen
                 {
                     response.EnsureSuccessStatusCode();
 
-                    string downloadPath = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                        "Downloads",
-                        filename
-                    );
-
-                    using (var responseStream = response.Content.ReadAsStreamAsync().Result)
-                    using (var fileStream = File.Create(downloadPath))
+                    using (var stream = response.Content.ReadAsStreamAsync().Result)
                     {
-                        responseStream.CopyTo(fileStream);
+                        // ----------------------------------------------------
+                        // MODE A: Image aus Stream zurückgeben
+                        // ----------------------------------------------------
+                        if (mode == "O")
+                        {
+                            return Image.FromStream(stream);
+                        }
+
+                        // ----------------------------------------------------
+                        // MODE B: Große Datei downloaden
+                        // ----------------------------------------------------
+                        string downloadPath = Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                            "Downloads",
+                            filename
+                        );
+
+                        using (var fs = File.Create(downloadPath))
+                        {
+                            stream.CopyTo(fs);
+                        }
+                        float mb = new FileInfo(downloadPath).Length; 
+                        mb = mb / (1024 * 1024);
+                        MessageBox.Show($"Erfolgreich heruntergeladen:\n{downloadPath}\n{mb:F2} MB");
+                        return null;
                     }
-
-                    long bytes = new FileInfo(downloadPath).Length;
-                    long mb = bytes / (1024 * 1024);
-
-                    MessageBox.Show($"{downloadPath} {mb} MB downloaded successfully.");
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Fehler beim NAS-Download: " + ex.Message);
+                MessageBox.Show("Fehler bei LoadFileFromNas: " + ex.Message);
+                return null;
             }
         }
+
 
         private Image LoadImageFromNas(string filename, string pathname)
         {
@@ -697,9 +703,9 @@ namespace Nas_Suchen
                 Klammer2 = klammer2,
                 Verknuepfung = verknuepfung,
 
-                Tabelle = "Media.media_files",
-                Tabelle_media_types = "Media.media_types",
-                Tabelle_ucodes = "sm.usercodes",
+                Tabelle = "public.vw_media_complete",
+                Tabelle_media_types = "public.media_types",
+                Tabelle_ucodes = "public.usercodes",
                 Sqlsort = sql_base,
                 StartPosition = FormStartPosition.Manual,
 
@@ -779,7 +785,7 @@ namespace Nas_Suchen
         }
         void GetThumbnailFromDatabase(int zeile)
         {
-            var cmd1 = new NpgsqlCommand("select thumbnail from public.media_files where filename = @filename and pathname = @pathname", dbconnection);
+            var cmd1 = new NpgsqlCommand("select thumbnail from public.vw_media_complete where filename = @filename and pathname = @pathname", dbconnection);
             cmd1.Parameters.AddWithValue("@filename", dataGridView1[Media_name, zeile].Value.ToString());
             cmd1.Parameters.AddWithValue("@pathname", dataGridView1[Media_pfad, zeile].Value.ToString());
             NpgsqlDataReader rdr = cmd1.ExecuteReader();
@@ -937,7 +943,7 @@ namespace Nas_Suchen
                     string filePath = dataGridView1.Rows[e.RowIndex].Cells[Media_pfad].Value.ToString();
                     string fileName = dataGridView1.Rows[e.RowIndex].Cells[Media_name].Value.ToString();
 
-                    loadFileFromNas(fileName, filePath);
+                    LoadFileFromNas(fileName, filePath, "D");
                 }
                 else if (e.ColumnIndex == Media_image)
                 {
@@ -974,7 +980,7 @@ namespace Nas_Suchen
                         var imgObj = dataGridView1.Rows[e.RowIndex].Cells[Media_image].Value;
                         if (imgObj == null)
                         {
-                            var cmd1 = new NpgsqlCommand("select thumbnail from public.media_files where filename = @filename and pathname = @pathname", dbconnection);
+                            var cmd1 = new NpgsqlCommand("select thumbnail from public.vw_media_complete where filename = @filename and pathname = @pathname", dbconnection);
                             cmd1.Parameters.AddWithValue("@filename", fileName);
                             cmd1.Parameters.AddWithValue("@pathname", filePath);
                             NpgsqlDataReader rdr = cmd1.ExecuteReader();
@@ -1001,7 +1007,7 @@ namespace Nas_Suchen
                     }
                     else  
                     {   //Original File verwenden               
-                        img = LoadImageFromNas(fileName, filePath);
+                        img = LoadFileFromNas(fileName, filePath, "O");
                     }
 
                     int origW = Convert.ToInt32(dataGridView1.Rows[e.RowIndex].Cells["Jahr"].Value);
