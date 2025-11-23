@@ -47,6 +47,10 @@
 <ItemGroup>
 		<None Include="version.res" />
 </ItemGroup>
+
+<ItemGroup>
+  <Folder Include="Mariadb_conf\" />
+</ItemGroup>
 	
 <PropertyGroup>
 		<Win32Resource>version.res</Win32Resource>
