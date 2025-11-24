@@ -436,7 +436,7 @@ namespace Nas_Suchen
                     ? filename
                     : pathname + "/" + filename;
 
-                string lanIp = Globals1.D_server_lan;
+                string lanIp = Globals1.D_server;
                 string wanHost = Globals1.D_QNAP_Cloud_id;
 
                 // ----------------------------------------------------

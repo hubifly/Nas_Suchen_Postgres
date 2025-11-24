@@ -21,7 +21,7 @@ namespace Nas_Suchen
         public static int Nas_local = 1;        // 1 = LAN (HTTP), 0 = WAN (HTTPS)
 
         // NAS Adressen
-        public static string D_server_lan = "192.168.1.22";           // LAN IP → HTTP
+        //public static string D_server_lan = "192.168.1.22";           // LAN IP → HTTP
         public static string D_QNAP_Cloud_id = "smnas3.myqnapcloud.com"; // WAN Domain → HTTPS
     }
 }
