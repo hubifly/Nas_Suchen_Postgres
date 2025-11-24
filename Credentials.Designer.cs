@@ -41,6 +41,8 @@
             btn_cancel = new Button();
             label5 = new Label();
             txt_port = new TextBox();
+            txt_url = new TextBox();
+            label6 = new Label();
             SuspendLayout();
             // 
             // label1
@@ -49,7 +51,7 @@
             label1.Name = "label1";
             label1.Size = new Size(122, 20);
             label1.TabIndex = 0;
-            label1.Text = "DB-Server";
+            label1.Text = "DB-Server (nur IP)";
             label1.TextAlign = ContentAlignment.MiddleRight;
             // 
             // label2
@@ -85,8 +87,8 @@
             // 
             txt_server.Location = new Point(138, 8);
             txt_server.Name = "txt_server";
-            txt_server.PlaceholderText = "192.168.1.22:3607";
-            txt_server.Size = new Size(116, 23);
+            txt_server.PlaceholderText = "192.168.1.22";
+            txt_server.Size = new Size(165, 23);
             txt_server.TabIndex = 4;
             // 
             // txt_dbname
@@ -94,7 +96,7 @@
             txt_dbname.Location = new Point(138, 56);
             txt_dbname.Name = "txt_dbname";
             txt_dbname.PlaceholderText = "Media";
-            txt_dbname.Size = new Size(116, 23);
+            txt_dbname.Size = new Size(165, 23);
             txt_dbname.TabIndex = 5;
             // 
             // txt_user
@@ -102,7 +104,7 @@
             txt_user.Location = new Point(138, 79);
             txt_user.Name = "txt_user";
             txt_user.PlaceholderText = "ha";
-            txt_user.Size = new Size(116, 23);
+            txt_user.Size = new Size(165, 23);
             txt_user.TabIndex = 6;
             // 
             // txt_password
@@ -110,12 +112,12 @@
             txt_password.Location = new Point(138, 102);
             txt_password.Name = "txt_password";
             txt_password.PasswordChar = '*';
-            txt_password.Size = new Size(116, 23);
+            txt_password.Size = new Size(165, 23);
             txt_password.TabIndex = 7;
             // 
             // btn_ok
             // 
-            btn_ok.Location = new Point(162, 164);
+            btn_ok.Location = new Point(162, 199);
             btn_ok.Name = "btn_ok";
             btn_ok.Size = new Size(92, 22);
             btn_ok.TabIndex = 8;
@@ -125,7 +127,7 @@
             // 
             // btn_check
             // 
-            btn_check.Location = new Point(12, 131);
+            btn_check.Location = new Point(12, 166);
             btn_check.Name = "btn_check";
             btn_check.Size = new Size(106, 22);
             btn_check.TabIndex = 9;
@@ -135,7 +137,7 @@
             // 
             // btn_cancel
             // 
-            btn_cancel.Location = new Point(162, 131);
+            btn_cancel.Location = new Point(162, 166);
             btn_cancel.Name = "btn_cancel";
             btn_cancel.Size = new Size(92, 22);
             btn_cancel.TabIndex = 10;
@@ -157,15 +159,33 @@
             txt_port.Location = new Point(138, 32);
             txt_port.Name = "txt_port";
             txt_port.PlaceholderText = "3306";
-            txt_port.Size = new Size(116, 23);
+            txt_port.Size = new Size(165, 23);
             txt_port.TabIndex = 12;
+            // 
+            // txt_url
+            // 
+            txt_url.Location = new Point(138, 126);
+            txt_url.Name = "txt_url";
+            txt_url.Size = new Size(165, 23);
+            txt_url.TabIndex = 13;
+            // 
+            // label6
+            // 
+            label6.Location = new Point(31, 125);
+            label6.Name = "label6";
+            label6.Size = new Size(102, 20);
+            label6.TabIndex = 14;
+            label6.Text = "URL von Zertifikat";
+            label6.TextAlign = ContentAlignment.MiddleRight;
             // 
             // db_Login
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(289, 197);
+            ClientSize = new Size(315, 240);
             ControlBox = false;
+            Controls.Add(label6);
+            Controls.Add(txt_url);
             Controls.Add(txt_port);
             Controls.Add(label5);
             Controls.Add(btn_cancel);
@@ -203,5 +223,7 @@
         private Button btn_cancel;
         private Label label5;
         private TextBox txt_port;
+        private TextBox txt_url;
+        private Label label6;
     }
 }

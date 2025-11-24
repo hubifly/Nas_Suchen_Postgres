@@ -22,13 +22,21 @@ namespace Nas_Suchen
 
         private void btn_ok_Click(object sender, EventArgs e)
         {
-            SaveCredentials(txt_server.Text, txt_dbname.Text, txt_user.Text, txt_password.Text, txt_port.Text);
+            SaveCredentials(
+                txt_server.Text,
+                txt_dbname.Text,
+                txt_user.Text,
+                txt_password.Text,
+                txt_port.Text,
+                txt_url.Text
+            );
 
             Globals1.D_server = txt_server.Text;
             Globals1.D_port = txt_port.Text;
             Globals1.D_db = txt_dbname.Text;
             Globals1.D_user = txt_user.Text;
             Globals1.D_pw = txt_password.Text;
+            Globals1.D_QNAP_Cloud_id = txt_url.Text;
 
             this.Close();
         }
@@ -36,9 +44,9 @@ namespace Nas_Suchen
         // --------------------------------------------------------------------
         // Credentials speichern
         // --------------------------------------------------------------------
-        private void SaveCredentials(string server, string dbName, string user, string password, string port)
+        private void SaveCredentials(string server, string dbName, string user, string password, string port, string wanUrl)
         {
-            string credentialData = $"{server}|{dbName}|{user}|{password}|{port}";
+            string credentialData = $"{server}|{dbName}|{user}|{password}|{port}|{wanUrl}";
             byte[] credentialBytes = Encoding.Unicode.GetBytes(credentialData);
 
             IntPtr credBlobPtr = Marshal.AllocHGlobal(credentialBytes.Length + 2);
@@ -85,8 +93,8 @@ namespace Nas_Suchen
 
             if (!saved)
             {
-                MessageBox.Show("Credentials konnten nicht gespeichert werden.", "Error",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Credentials konnten nicht gespeichert werden.",
+                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -112,6 +120,7 @@ namespace Nas_Suchen
                 txt_user.Text = parts[2];
                 txt_password.Text = parts[3];
                 txt_port.Text = parts.Length > 4 ? parts[4] : "";
+                txt_url.Text = parts.Length > 5 ? parts[5] : "";
 
                 NativeMethods.CredFree(credPtr);
             }
@@ -137,8 +146,10 @@ namespace Nas_Suchen
                 using (var conn = new NpgsqlConnection(builder.ConnectionString))
                 {
                     conn.Open();
-                    MessageBox.Show("PostgreSQL Verbindung erfolgreich!\n\nVersion: " +
-                                    conn.PostgreSqlVersion);
+                    MessageBox.Show(
+                        "PostgreSQL Verbindung erfolgreich!\n\nVersion: " +
+                        conn.PostgreSqlVersion
+                    );
                 }
             }
             catch (Exception ex)
@@ -146,13 +157,11 @@ namespace Nas_Suchen
                 MessageBox.Show("Verbindungsfehler:\n" + ex.Message);
             }
         }
-        private void label4_Click(object sender, EventArgs e)
-        {
-        }
 
-        private void label3_Click(object sender, EventArgs e)
-        {
-        }
+        private void label4_Click(object sender, EventArgs e) { }
+
+        private void label3_Click(object sender, EventArgs e) { }
+
         private void btn_cancel_Click(object sender, EventArgs e)
         {
             Globals1.D_cancel = 1;

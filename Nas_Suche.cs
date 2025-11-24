@@ -442,7 +442,7 @@ namespace Nas_Suchen
                 // ----------------------------------------------------
                 // 2) LAN/WAN nur beim ersten Mal testen
                 // ----------------------------------------------------
-                if (Globals1.NasSid == null)
+                if (Globals1.Nas_connect == null)
                 {
                     bool isLan;
 
@@ -460,7 +460,7 @@ namespace Nas_Suchen
                     }
 
                     Globals1.Nas_local = isLan ? 1 : 0;
-                    Globals1.NasSid = "done";    // Marker
+                    Globals1.Nas_connect = "done";    // Marker
                 }
 
                 string baseUrl = (Globals1.Nas_local == 1)
