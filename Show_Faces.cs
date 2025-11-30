@@ -347,8 +347,8 @@ namespace Nas_Suchen
                     : Convert.ToInt64(val);
 
                 string sql =
-                    @"UPDATE Media.face_vectors
-              SET personen_id = @pid
+                    @"UPDATE public.face_vectors
+              SET personen_id = @pid, zuordnung = 3
               WHERE id = @id AND number = @num";
 
                 using var cmd = new NpgsqlCommand(sql, _db);
