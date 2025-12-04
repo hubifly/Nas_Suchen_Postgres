@@ -606,21 +606,12 @@ namespace Nas_Suchen
             }
             catch (NpgsqlException ex)
             {
-                MessageBox.Show(
-                    $"PostgreSQL SQL-Error:\n\n{ex.Message}\n\nSQL:\n{cmd1?.CommandText}",
-                    "SQL Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
+                string msg = $"PostgreSQL SQL-Error:\n\n{ex.Message}\n\nSQL:\n{cmd1?.CommandText}";
+                new ErrorDialog("SQL Error", msg).ShowDialog();
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    $"Unexpected Error:\n\n{ex.Message}",
-                    "Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
+                new ErrorDialog("Unexpected Error", ex.ToString()).ShowDialog();
             }
             finally
             {
