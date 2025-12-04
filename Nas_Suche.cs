@@ -546,55 +546,89 @@ namespace Nas_Suchen
 
         private void FillDataGridMedia(string sql_select)
         {
-            var cmd1 = new NpgsqlCommand("", dbconnection);
-            if (sql_select != "")
-            {
-                //sql_select = sql_select.Replace(@"\", @"\\");
-                cmd1 = new NpgsqlCommand(sql_select, dbconnection);
-            }
-            else
-            {
-                string numbers = new string(txt_records.Text.Where(char.IsDigit).ToArray());
-                cmd1 = new NpgsqlCommand(sql_base + " where mf.pathname = '\\\\sm-nas3\\Multimedia' LIMIT " + numbers + " ", dbconnection);
-            }
-            NpgsqlDataReader rdr = cmd1.ExecuteReader();
+            NpgsqlCommand cmd1 = null;
+            NpgsqlDataReader rdr = null;
 
-            dataGridView1.Rows.Clear();
-            int anz = 0;
-            while (rdr.Read())
+            try
             {
-                anz++;
-                dataGridView1.Rows.Add();
-                FillDataGridHandleNull(dataGridView1, rdr, 0, Media_name, DBtypen[Media_name]);
-                FillDataGridHandleNull(dataGridView1, rdr, 1, Media_pfad, DBtypen[Media_pfad]);
-                FillDataGridHandleNull(dataGridView1, rdr, 2, Media_interpret, DBtypen[Media_interpret]);
-                FillDataGridHandleNull(dataGridView1, rdr, 3, Media_year, DBtypen[Media_year]);
-                FillDataGridHandleNull(dataGridView1, rdr, 4, Media_album, DBtypen[Media_album]);
-                FillDataGridHandleNull(dataGridView1, rdr, 5, Media_genre, DBtypen[Media_genre]);
-                FillDataGridHandleNull(dataGridView1, rdr, 6, Media_ext,  DBtypen[Media_ext]);
-                FillDataGridHandleNull(dataGridView1, rdr, 7, Media_added, DBtypen[Media_added]);
-                FillDataGridHandleNull(dataGridView1, rdr, 8, Media_fileext, DBtypen[Media_fileext]);
-                FillDataGridHandleNull(dataGridView1, rdr, 9, Media_aufnahme_datum, DBtypen[Media_aufnahme_datum]);
-
-                DataGridViewComboBoxCell comboBoxCell = dataGridView1[Media_source, dataGridView1.RowCount - 1] as DataGridViewComboBoxCell;
-                if (kfiletypen.IndexOf(rdr.GetInt32(10).ToString()) >= 0)
+                if (!string.IsNullOrWhiteSpace(sql_select))
                 {
-                    //MessageBox.Show("X" + ktypen_t[ktypen.IndexOf(rdr.GetString(Haupbt_s_typ))] + "X");
-                    comboBoxCell.Value = kfiletypen_t[kfiletypen.IndexOf(rdr.GetInt32(10).ToString())];
+                    cmd1 = new NpgsqlCommand(sql_select, dbconnection);
+                }
+                else
+                {
+                    string numbers = new string(txt_records.Text.Where(char.IsDigit).ToArray());
+                    string fallbackSql = sql_base + " where mf.pathname = '\\\\sm-nas3\\Multimedia' LIMIT " + numbers;
+                    cmd1 = new NpgsqlCommand(fallbackSql, dbconnection);
                 }
 
-                FillDataGridHandleNull(dataGridView1, rdr, 12, Media_latitude, DBtypen[Media_latitude -1]);
-                FillDataGridHandleNull(dataGridView1, rdr, 13, Media_longitude, DBtypen[Media_longitude -1]);
-                FillDataGridHandleNull(dataGridView1, rdr, 14, Media_size_bytes, DBtypen[Media_size_bytes -1]);
-                FillDataGridHandleNull(dataGridView1, rdr, 15, Media_thumbnail_size, DBtypen[Media_thumbnail_size - 1]);
-                FillDataGridHandleNull(dataGridView1, rdr, 16, Media_person_nr, DBtypen[Media_person_nr - 1]);  
-                FillDataGridHandleNull(dataGridView1, rdr, 17, Media_face_scan_date, DBtypen[Media_face_scan_date - 1]);        
-                FillDataGridHandleNull(dataGridView1, rdr, 18, Media_face_scan_count, DBtypen[Media_face_scan_count - 1]);
-                txt_max_recs.Text = rdr.GetInt32(Media_source).ToString();
+                rdr = cmd1.ExecuteReader();
+
+                dataGridView1.Rows.Clear();
+                int anz = 0;
+
+                while (rdr.Read())
+                {
+                    anz++;
+                    dataGridView1.Rows.Add();
+
+                    FillDataGridHandleNull(dataGridView1, rdr, 0, Media_name, DBtypen[Media_name]);
+                    FillDataGridHandleNull(dataGridView1, rdr, 1, Media_pfad, DBtypen[Media_pfad]);
+                    FillDataGridHandleNull(dataGridView1, rdr, 2, Media_interpret, DBtypen[Media_interpret]);
+                    FillDataGridHandleNull(dataGridView1, rdr, 3, Media_year, DBtypen[Media_year]);
+                    FillDataGridHandleNull(dataGridView1, rdr, 4, Media_album, DBtypen[Media_album]);
+                    FillDataGridHandleNull(dataGridView1, rdr, 5, Media_genre, DBtypen[Media_genre]);
+                    FillDataGridHandleNull(dataGridView1, rdr, 6, Media_ext, DBtypen[Media_ext]);
+                    FillDataGridHandleNull(dataGridView1, rdr, 7, Media_added, DBtypen[Media_added]);
+                    FillDataGridHandleNull(dataGridView1, rdr, 8, Media_fileext, DBtypen[Media_fileext]);
+                    FillDataGridHandleNull(dataGridView1, rdr, 9, Media_aufnahme_datum, DBtypen[Media_aufnahme_datum]);
+
+                    // ComboBox
+                    DataGridViewComboBoxCell comboBoxCell =
+                        dataGridView1[Media_source, dataGridView1.RowCount - 1] as DataGridViewComboBoxCell;
+
+                    if (kfiletypen.IndexOf(rdr.GetInt32(10).ToString()) >= 0)
+                        comboBoxCell.Value = kfiletypen_t[kfiletypen.IndexOf(rdr.GetInt32(10).ToString())];
+
+                    FillDataGridHandleNull(dataGridView1, rdr, 12, Media_latitude, DBtypen[Media_latitude - 1]);
+                    FillDataGridHandleNull(dataGridView1, rdr, 13, Media_longitude, DBtypen[Media_longitude - 1]);
+                    FillDataGridHandleNull(dataGridView1, rdr, 14, Media_size_bytes, DBtypen[Media_size_bytes - 1]);
+                    FillDataGridHandleNull(dataGridView1, rdr, 15, Media_thumbnail_size, DBtypen[Media_thumbnail_size - 1]);
+                    FillDataGridHandleNull(dataGridView1, rdr, 16, Media_person_nr, DBtypen[Media_person_nr - 1]);
+                    FillDataGridHandleNull(dataGridView1, rdr, 17, Media_face_scan_date, DBtypen[Media_face_scan_date - 1]);
+                    FillDataGridHandleNull(dataGridView1, rdr, 18, Media_face_scan_count, DBtypen[Media_face_scan_count - 1]);
+
+                    txt_max_recs.Text = rdr.GetInt32(Media_source).ToString();
+                }
+
+                if (anz <= 0)
+                    txt_max_recs.Text = "0";
             }
-            if (anz <= 0) { txt_max_recs.Text = "0"; }
-            rdr.Close();
+            catch (NpgsqlException ex)
+            {
+                MessageBox.Show(
+                    $"PostgreSQL SQL-Error:\n\n{ex.Message}\n\nSQL:\n{cmd1?.CommandText}",
+                    "SQL Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Unexpected Error:\n\n{ex.Message}",
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+            finally
+            {
+                rdr?.Close();
+                cmd1?.Dispose();
+            }
         }
+
 
         void FillDataGridHandleNull(DataGridView g, NpgsqlDataReader r, int selpos, int gridpos, int d_type)
         {
