@@ -96,6 +96,8 @@ namespace Nas_Suchen
         NpgsqlConnection dbconnection = new NpgsqlConnection();
         NpgsqlConnection dbconnection_sm = new NpgsqlConnection();
 
+        int DB_Type = 1; // 0=MySQL, 1=PostgreSQL
+
         string sql_base = "SELECT mf.filename, mf.pathname, mf.interpret, mf.year, mf.album, mf.genre, mf.description, mf.added, mf.ext_char, mf.aufnahme_datum, mf.source, count(*) OVER (), " +
                           "mf.latitude, mf.longitude, mf.size_bytes, mf.thumbnail_length, mf.id, mf.vector_created, mf.face_count " +
                           "FROM public.vw_media_complete mf";
@@ -321,7 +323,7 @@ namespace Nas_Suchen
                         if (i == Media_year) zfmt = "";
                         var col = new DataGridViewTextBoxColumn
                         {
-                            Name = Spalten_namen[i],
+                            Name = Spalten_namen[i],       
                             ValueType = typeof(int),
                             ReadOnly = true,
                             DefaultCellStyle =
@@ -387,7 +389,7 @@ namespace Nas_Suchen
                         DefaultCellStyle =
                         {
                             Alignment = DataGridViewContentAlignment.MiddleRight,
-                            Format = "N2",
+                            //Format = "N2",
                             FormatProvider = new System.Globalization.CultureInfo("de-DE")
                         }
                     });
@@ -721,7 +723,8 @@ namespace Nas_Suchen
                 Sort_verknuepfung = "Verknüpfung",
                 Sort_expert = "Expertenmodus",
                 Sort_expertmode = expert_mode,
-                Connection = connect
+                Connection = connect,
+                DB_Type = DB_Type
             };
 
             Form af = this;
